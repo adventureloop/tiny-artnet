@@ -40,11 +40,11 @@ def gen_artnet_pkt(data,universe=0x00):
 
     return pkt_hdr + data
 
-def rand_artnet_pkt():
+def rand_artnet_pkt(full=False):
         data = ""
 
         for i in range(1,512):
-            if FULL:
+            if full:
                 data += chr(0xFF)
             else:
                 data += chr(random.randint(0, 255))
