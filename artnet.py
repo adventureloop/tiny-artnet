@@ -23,10 +23,10 @@ def gen_artnet_pkt(data,universe=0x00):
     length = len(data)
    
     if length > 513:
-        print "too long"
+        print("too long")
         return ""
 
-    name = "Art-Net"
+    name = b"Art-Net"
     zero = 0 
     opcode = socket.htons(0x0050)
     protovers = socket.htons(14)
@@ -41,13 +41,14 @@ def gen_artnet_pkt(data,universe=0x00):
     return pkt_hdr + data
 
 def rand_artnet_pkt(full=False):
-        data = ""
+        data = b""
+        data = bytearray()
 
         for i in range(1,512):
             if full:
-                data += chr(0xFF)
+                data.append(0xFF)
             else:
-                data += chr(random.randint(0, 255))
+                data.append(random.randint(0, 255))
         return gen_artnet_pkt(data)
 
 def parse_artnet_pkt(data):
@@ -74,5 +75,5 @@ def parse_artnet_pkt(data):
         pkt_data = data[18:total_len] 
         return pkt_hdr + pkt_data, data[total_len:]
     else: 
-        print "whole packet not here yet"
+        print("whole packet not here yet")
         return "", data

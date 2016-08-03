@@ -32,8 +32,8 @@ def hexdump(src, length=8):
 
 def pktgen(artnet_port):
     broadcast_addr = "255.255.255.255"
-    print "sending to: ", broadcast_addr, artnet_port, " every ", DELAY, " seconds"
-
+    #print "sending to: ", broadcast_addr, artnet_port, " every ", DELAY, " seconds"
+    print("sending to: {} {} every {} seconds".format(broadcast_addr, artnet_port, DELAY))
 
     artnet_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     artnet_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     mode = sys.argv[1]
     artnet_port = 6454
 
-    print "                                 ", mode
+    print("                                 {}".format(mode))
 
     if mode == "pktgen":
         pktgen(artnet_port)
