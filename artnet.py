@@ -1,8 +1,7 @@
-import socket
 import sys
 from struct import *
 import time
-import random
+#import random
 
 artnet_pkt = "\x41\x72\x74\x2d\x4e\x65\x74\x00\x00\x50\x00\x0e\x00\x00\x00\x00\x00\x10\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"
 
@@ -28,27 +27,26 @@ def gen_artnet_pkt(data,universe=0x00):
 
     name = b"Art-Net"
     zero = 0 
-    opcode = socket.htons(0x0050)
-    protovers = socket.htons(14)
+    opcode = 0x0050
+    protovers = 14
     seq = 0
     phys = 0
     universe = 0x00
-    length = socket.htons(length)
     
-    pkt_hdr = pack("7sBHHBBHH", name, zero, opcode,\
+    pkt_hdr = pack("!7sBHHBBHH", name, zero, opcode,\
         protovers, seq, phys, universe, length)
 
     return pkt_hdr + data
 
 def rand_artnet_pkt(full=False):
-        data = b""
         data = bytearray()
 
         for i in range(1,512):
             if full:
                 data.append(0xFF)
             else:
-                data.append(random.randint(0, 255))
+                #data.append(random.randint(0, 255))
+                data.append(0xF0)
         return gen_artnet_pkt(data)
 
 def parse_artnet_pkt(data):
@@ -64,11 +62,11 @@ def parse_artnet_pkt(data):
         universe, length = unpack("7sBHHBBHH",header)
 
     #TODO don't do this, flatten universe 
-    universe = socket.ntohs(0x00)
+    universe = 0x00
 
-    pkt_hdr = pack("7sBHHBBHH", name, zero, opcode,\
+    pkt_hdr = pack("!7sBHHBBHH", name, zero, opcode,\
         protovers, seq, phys, universe, length)
-    length = socket.ntohs(length)
+    length = length
     total_len = 18 + length
 
     if length >= 2 and total_len <= data_len:
