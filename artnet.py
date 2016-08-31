@@ -71,7 +71,8 @@ def parse_artnet_pkt(data):
 
     if length >= 2 and total_len <= data_len:
         pkt_data = data[18:total_len] 
-        return pkt_hdr + pkt_data, data[total_len:]
+#return pkt_hdr + pkt_data, data[total_len:] #I have no idea what this does
+        return pkt_hdr, pkt_data
     else: 
-        print("whole packet not here yet")
+        print("broken packet")
         return "", data

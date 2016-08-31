@@ -43,9 +43,11 @@ def hexdump(src, length=8):
 
 def pktgen():
     broadcast_addr = "255.255.255.255"
-    print("sending to: {} {} every {} seconds".format(broadcast_addr, artnet_port, DELAY))
+    print("       sending to: {} {} every {} seconds"
+        .format(broadcast_addr, artnet_port, DELAY))
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  #required on a unix system
 
     while True:
@@ -59,20 +61,23 @@ def pktgen():
         sys.stdout.flush()
         time.sleep(DELAY)
 
-def pktshow():
+def pktshow(output):
     broadcast_addr = "255.255.255.255"
-    print("sending to: {} {} every {} seconds".format(broadcast_addr, artnet_port, DELAY))
+    print("          receiving from {} {}"
+        .format(broadcast_addr, artnet_port))
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  #required on a unix system
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
     while True:
-        pkt,addr = sock.recvfrom(BUFSIZE)
+        pkt,addr = sock.recvfrom(BUFSIZE) #blocks
 
         if VERBOSE == "silly":
             print(hexdump(pkt))
 
-        pkt = parse_artnet_pkt(pkt) this doesn't do what I need'
+        pkt = parse_artnet_pkt(pkt)
+        output(pkt)
 
         sys.stdout.write(".")
         sys.stdout.flush()
@@ -88,20 +93,33 @@ def setupnetwork():
     nic = network.CC3100()
     nic.connect("ssid","password")
 
+def hwdisplay():
+    pyb.led(ledr, high)
+
+def consoledisplay():
+    print("CONSOLE!!!")
+
 if __name__ == "__main__":
 
     mode = "pktgen" # pktgen|pktshow
     mode = "pktshow"
+    mode = "pktgen"
 
     if VERBOSE == "sensible":
         print(startup_msg)
         print("                         {}".format(mode))
 
+    outputcb = consoledisplay
+
+    if PYVERSION == "cpython":
+        if len(sys.argv) == 2:
+            mode = sys.argv[1]
     if PYVERSION == "micropython":
         setuphardware()
         setupnetwork()
-
+        outputcb = hwdisplay
+    
     if mode == "pktgen":
         pktgen()
     if mode == "pktshow":
-        pktshow()
+        pktshow(outputcb)
