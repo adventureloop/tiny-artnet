@@ -1,8 +1,12 @@
 import sys
+import os
 from struct import *
 import time
+import socket
+import ugfx
+import buttons
 
-DELAY = 0.5
+DELAY = 5
 VERBOSE = "sensible" # on|off|sensible|silly
 BUFSIZE = 1024
 artnet_port = 6454
@@ -10,22 +14,12 @@ artnet_port = 6454
 
 artnet_pkt = "\x41\x72\x74\x2d\x4e\x65\x74\x00\x00\x50\x00\x0e\x00\x00\x00\x00\x00\x10\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"
 
-def hexdump(src, length=8):
-    result = []
-    digits = 4 if isinstance(src, unicode) else 2
-    for i in xrange(0, len(src), length):
-       s = src[i:i+length]
-       hexa = b' '.join(["%0*X" % (digits, ord(x))  for x in s])
-       text = b''.join([x if 0x20 <= ord(x) < 0x7F else b'.'  for x in s])
-       result.append( b"%04X   %-*s   %s" % (i, length*(digits + 1), hexa, text) )
-    return b'\n'.join(result)
+container = None
+selected = [0,0]
 
 def gen_artnet_pkt(data,universe=0x00):
-    #name, zero, opcode, protovers, seq, phys, \
-    #universe, length = unpack("7scHHccHH",header)
-
     length = len(data)
-   
+
     if length > 513:
         print("too long")
         return ""
@@ -43,39 +37,30 @@ def gen_artnet_pkt(data,universe=0x00):
     return pkt_hdr + data
 
 def rand_artnet_pkt(full=False):
-        data = bytearray()
-
-        for i in range(1,512):
-            if full:
-                data.append(0xFF)
-            else:
-                #data.append(random.randint(0, 255))
-                data.append(0xF0)
-        return gen_artnet_pkt(data)
+    return gen_artnet_pkt(os.urandom(512))
 
 def parse_artnet_pkt(data):
-
     data_len = len(data)
 
     if data_len < 20:
         return "", data
+    print("packet len {}", data_len)
 
     header = data[:18]
 
+    print("header: {}".format(header))
     name, zero, opcode, protovers, seq, phys, \
         universe, length = unpack("7sBHHBBHH",header)
-
-    #TODO don't do this, it flattens the universe, who knows how many will die?
-    #universe = 0x00
+    print("name: {}, zero: {}, opcode: {}, protovers: {}, seq: {}, phys: {}, universe: {}, length: {}".format(
+        name, zero, opcode, protovers, seq, phys, universe, length))
 
     pkt_hdr = pack("!7sBHHBBHH", name, zero, opcode,\
         protovers, seq, phys, universe, length)
-    length = length
-    total_len = 18 + length
+    artnet_pkt_len = 18 + length
 
-    if length >= 2 and total_len <= data_len:
-        pkt_data = data[18:total_len] 
-#return pkt_hdr + pkt_data, data[total_len:] #I have no idea what this does
+    print("length {} total_len {} data_len {}".format(length, artnet_pkt_len, data_len))
+    if length >= 2 and artnet_pkt_len  <= data_len:
+        pkt_data = data[18:artnet_pkt_len] 
         return pkt_hdr, pkt_data
     else: 
         print("bad packet")
@@ -87,14 +72,11 @@ def pktgen(displaycb):
         .format(broadcast_addr, artnet_port, DELAY))
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  #required on a unix system
+    #sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    #sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  #required on a unix system
 
     while True:
         pkt = rand_artnet_pkt()
-
-        if VERBOSE == "silly":
-            print(hexdump(pkt))
 
         sock.sendto(pkt, (broadcast_addr, artnet_port))
         #if displaycb: doesn't work with an entire packet, hmmmmmm
@@ -105,59 +87,88 @@ def pktgen(displaycb):
         time.sleep(DELAY)
 
 def pktshow(displaycb):
-    broadcast_addr = "255.255.255.255"
+#    broadcast_addr = "255.255.255.255" # we should bind to this
+    broadcast_addr = "0.0.0.0" #the emfbadge doesn't behave here
     print("          receiving from {} {}"
         .format(broadcast_addr, artnet_port))
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    #bind might be required
+
+    #emfcamp badge doesn't support socket options
+    #sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
+    #sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+
+    sock.bind((broadcast_addr,artnet_port))
 
     while True:
         pkt,addr = sock.recvfrom(BUFSIZE) #blocks
+        print("addr {}".format(addr))
 
-        if VERBOSE == "silly":
-            print(hexdump(pkt))
+        pkt_hdr, pkt_data = parse_artnet_pkt(pkt)
+        displaycb(pkt_data)
 
-        pkt = parse_artnet_pkt(pkt)
-        displaycb(pkt)
+def drawdata(data):
+    width = 10
+    selx = selected[0]*width
+    sely = selected[1]*width
 
-        sys.stdout.write(".")
-        sys.stdout.flush()
-        #time.sleep(DELAY)
+    data = list(data)
+    data.extend([0] * (512 - len(data))) #pad out to 512 bytes
 
-def guinonesense(displaycb):
-    broadcast_addr = "255.255.255.255"
-    print("          receiving from {} {}"
-        .format(broadcast_addr, artnet_port))
+    for x in range(0, 32):
+        for y in range(0, 16):
+            val = data[x*y+y]
+            colour = ugfx.html_color(int("0x{:02X}{:02X}{:02X}".format(val,val,val)))
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    #bind might be required
+            container.area(x*width, y*width, width, width, colour)
+            container.box(x*width, y*width, width, width, ugfx.ORANGE)
 
-    while True:
-        pkt,addr = sock.recvfrom(BUFSIZE) #blocks
+            container.box(selx, sely, width, width, ugfx.WHITE)
+            container.show()
 
-        if VERBOSE == "silly":
-            print(hexdump(pkt))
+    container.show()
+    processbuttons()
 
-        pkt = parse_artnet_pkt(pkt)
-        displaycb(pkt)
+def processbuttons():
+    if buttons.is_pressed("JOY_RIGHT"):
+        selected[0] = selected[0] + 1
+    elif buttons.is_pressed("JOY_LEFT"):
+        selected[0] = selected[0] - 1
+    elif buttons.is_pressed("JOY_DOWN"):
+        selected[1] = selected[0] + 1
+    elif buttons.is_pressed("JOY_UP"):
+        selected[1] = selected[0] - 1
 
-        sys.stdout.write(".")
-        sys.stdout.flush()
-        #time.sleep(DELAY)
+    if selected[0] > 320:
+        selected[0] = 320
+    if selected[0] < 0:
+        selected[0] = 0
 
-
-def hwdisplay():
-    pyb.led(ledr, high)
-
-def consoledisplay(pkt):
-    print("something something packet")
+    if selected[1] > 160:
+        selected[1] = 160
+    if selected[1] < 0:
+        selected[1] = 0
+        
+    if buttons.is_pressed("BTN_A"):
+            index = selected[0]*selected[1]+selected[1]
+            val = data[index] + 10
+            if val > 255:
+                val = 255
+            data[index] = val
+    if buttons.is_pressed("BTN_B"):
+            index = selected[0]*selected[1]+selected[1]
+            val = data[index] - 10
+            if val < 0:
+                val = 0
+            data[index] = val 
 
 if __name__ == "__main__":
-    #guinonesense(hwdisplay)
-    #pktshow(consoledisplay)
-    pktgen(consoledisplay)
+    #guinonesense(neopixeldisplay)
+    #pktgen(consoledisplay)
+
+    ugfx.clear(ugfx.BLUE)
+    ugfx.set_default_font(ugfx.FONT_SMALL)
+
+    container = ugfx.Container(0, 80,320,160)
+
+    pktshow(drawdata)
