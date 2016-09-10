@@ -1,3 +1,8 @@
+### Author: tj <tj@enoti.me>
+### Description: Scottish Consulate Techno Disco
+### Category: Other
+### License: BSD 3
+
 import sys
 import os
 from struct import *
@@ -48,9 +53,8 @@ def parse_artnet_pkt(data):
 
     header = data[:18]
 
-    print("header: {}".format(header))
     name, zero, opcode, protovers, seq, phys, \
-        universe, length = unpack("7sBHHBBHH",header)
+        universe, length = unpack("!7sBHHBBHH",header)
     print("name: {}, zero: {}, opcode: {}, protovers: {}, seq: {}, phys: {}, universe: {}, length: {}".format(
         name, zero, opcode, protovers, seq, phys, universe, length))
 
@@ -87,8 +91,8 @@ def pktgen(displaycb):
         time.sleep(DELAY)
 
 def pktshow(displaycb):
-#    broadcast_addr = "255.255.255.255" # we should bind to this
-    broadcast_addr = "0.0.0.0" #the emfbadge doesn't behave here
+    broadcast_addr = "255.255.255.255" # we should bind to this
+#    broadcast_addr = "0.0.0.0" #the emfbadge doesn't behave here
     print("          receiving from {} {}"
         .format(broadcast_addr, artnet_port))
 
@@ -113,11 +117,14 @@ def drawdata(data):
     sely = selected[1]*width
 
     data = list(data)
-    data.extend([0] * (512 - len(data))) #pad out to 512 bytes
+    if(len(data) < 512):
+        data.extend([0] * (512 - len(data))) #pad out to 512 bytes
 
     for x in range(0, 32):
         for y in range(0, 16):
-            val = data[x*y+y]
+            val = data[x*16+y]
+            if x == 0:
+                print(val)
             colour = ugfx.html_color(int("0x{:02X}{:02X}{:02X}".format(val,val,val)))
 
             container.area(x*width, y*width, width, width, colour)
@@ -162,13 +169,12 @@ def processbuttons():
                 val = 0
             data[index] = val 
 
-if __name__ == "__main__":
-    #guinonesense(neopixeldisplay)
-    #pktgen(consoledisplay)
+#if __name__ == "__main__":
+print("starting")
 
-    ugfx.clear(ugfx.BLUE)
-    ugfx.set_default_font(ugfx.FONT_SMALL)
+ugfx.init()
+ugfx.clear()
+ugfx.set_default_font(ugfx.FONT_SMALL)
+container = ugfx.Container(0, 80,320,160)
 
-    container = ugfx.Container(0, 80,320,160)
-
-    pktshow(drawdata)
+pktshow(drawdata)
