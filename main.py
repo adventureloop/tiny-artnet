@@ -11,6 +11,7 @@ import socket
 import ugfx
 import buttons
 import wifi
+import gc
 
 DELAY = 0.5
 VERBOSE = "sensible" # on|off|sensible|silly
@@ -69,13 +70,11 @@ def parse_artnet_pkt(data):
 
 def pktgen(displaycb):
     broadcast_addr = "255.255.255.255"
-    #broadcast_addr = "172.31.5.255"
     print("       sending to: {} {} every {} seconds"
         .format(broadcast_addr, artnet_port, DELAY))
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-   # pktdata = os.urandom(512)
     pktdata = []
 
     start = time.ticks_ms()
@@ -93,7 +92,6 @@ def pktgen(displaycb):
             return
 
 def pktshow(displaycb):
-    #broadcast_addr = "255.255.255.255" # we should bind to this
     broadcast_addr = "0.0.0.0" #these boards aren't happy with the broadcast addr
     print("          receiving from {} {}"
         .format(broadcast_addr, artnet_port))
@@ -178,6 +176,9 @@ def processbuttons(data):
     return data
 
 def tinyartnet():
+    print("{} bytes free".format(gc.mem_free()))
+    gc.collect()
+    print("{} bytes free".format(gc.mem_free()))
     while True:
         if transmitter:
             pktgen(drawdata)
@@ -188,7 +189,11 @@ print("starting")
 
 buttons.init()
 ugfx.init()
-ugfx.clear()
+ugfx.clear(ugfx.BLACK)
+ugfx.set_default_font(ugfx.FONT_NAME)
+ugfx.text(0, 5, "TINY-ARTNET", ugfx.GREEN)
+ugfx.set_default_font(ugfx.FONT_TITLE)
+ugfx.text(2, 50, "UNIVERSE 01", ugfx.YELLOW)
 ugfx.set_default_font(ugfx.FONT_SMALL)
 container = ugfx.Container(0, 80,320,160)
 
