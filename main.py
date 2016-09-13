@@ -68,14 +68,16 @@ def parse_artnet_pkt(data):
         return "", data
 
 def pktgen(displaycb):
-    #broadcast_addr = "255.255.255.255"
-    broadcast_addr = "172.31.5.243"
+    broadcast_addr = "255.255.255.255"
+    #broadcast_addr = "172.31.5.255"
     print("       sending to: {} {} every {} seconds"
         .format(broadcast_addr, artnet_port, DELAY))
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    pktdata = os.urandom(512)
+   # pktdata = os.urandom(512)
+    pktdata = []
+
     start = time.ticks_ms()
     while True:
         #pktdata = os.urandom(512)
@@ -116,9 +118,10 @@ def drawdata(data):
     if(len(data) < 512):
         data.extend([0] * (512 - len(data))) #pad out to 512 bytes
 
-    for x in range(0, 32):
-        for y in range(0, 16):
-            val = data[x*16+y]
+    for y in range(0, 16):
+        for x in range(0, 32):
+            #val = data[x*16+y] #working, 90 degrees off
+            val = data[y*32+x] 
             colour = ugfx.html_color(int("0x{:02X}{:02X}{:02X}".format(val,val,val)))
 
             container.area(x*width, y*width, width, width, colour)
@@ -152,16 +155,18 @@ def processbuttons(data):
         selected[1] = 160
     if selected[1] < 0:
         selected[1] = 0
-        
+       
+    inc = 30
     if buttons.is_pressed("BTN_A"):
-        index = selected[0]*16+selected[1]
-        val = data[index] + 10
+        index = selected[1]*32+selected[0]
+        
+        val = data[index] + inc
         if val > 255:
             val = 255
         data[index] = val
     if buttons.is_pressed("BTN_B"):
-        index = selected[0]*16+selected[1]
-        val = data[index] - 10
+        index = selected[1]*32+selected[0]
+        val = data[index] - inc
         if val < 0:
             val = 0
         data[index] = val 
