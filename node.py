@@ -5,14 +5,18 @@
 
 import sys
 import os
-from struct import *
+from ustruct import *
 import time
 import socket
+import machine
+import neopixel
 
 DELAY = 5
 VERBOSE = "sensible" # on|off|sensible|silly
 BUFSIZE = 1024
 artnet_port = 6454
+PIXELCOUNT = 40
+np = None
 
 def parse_artnet_pkt(data):
     data_len = len(data)
@@ -41,8 +45,8 @@ def parse_artnet_pkt(data):
         return "", data
 
 def pktshow(displaycb):
-    broadcast_addr = "255.255.255.255" # we should bind to this
-#    broadcast_addr = "0.0.0.0" #the emfbadge doesn't behave here
+#    broadcast_addr = "255.255.255.255" # we should bind to this
+    broadcast_addr = "0.0.0.0" #the emfbadge doesn't behave here
     print("          receiving from {} {}"
         .format(broadcast_addr, artnet_port))
 
@@ -61,15 +65,53 @@ def pktshow(displaycb):
         pkt_hdr, pkt_data = parse_artnet_pkt(pkt)
         displaycb(pkt_data)
 
+def chunks(l, n):
+    n = max(1, n)
+    return [l[i:i + n] for i in range(0, len(l), n)]
+
+def alloff():
+    allcolour(( 0, 0, 0))
+
+def allcolour(colour):
+    for x in range(PIXELCOUNT):
+        np[x] = colour
+    np.write() 
+
 def drawdata(data):
-    print(data)
+    alloff()
 
-#if __name__ == "__main__":
-print("starting")
+    pixels = list(chunks( data[:3*PIXELCOUNT], 3))
+    for x in range(PIXELCOUNT):
+        np[x] = (pixels[0])
+    np.write()
 
-ugfx.init()
-ugfx.clear()
-ugfx.set_default_font(ugfx.FONT_SMALL)
-container = ugfx.Container(0, 80,320,160)
+def networkinit(): 
+    import network
+    sta_if = network.WLAN(network.STA_IF)
+    if not sta_if.isconnected():
+        print('connecting to network...')
+        sta_if.active(True)
+        sta_if.connect('57North', 'thiswifiisnotforyou')
+        while not sta_if.isconnected():
+            pass
+    print('network config:', sta_if.ifconfig())  
 
-pktshow(drawdata)
+if __name__ == "__main__":
+    print("starting")
+
+    np = neopixel.NeoPixel(machine.Pin(2), PIXELCOUNT)
+
+    np[0] = (255, 0, 0)
+    np.write()
+    time.sleep(1)
+
+    np[0] = ( 0, 255, 0)
+    np.write()
+    time.sleep(1)
+
+    np[0] = ( 0, 0, 255)
+    np.write()
+    time.sleep(1)
+
+    allcolour( ( 0, 0, 0))
+    pktshow(drawdata)
