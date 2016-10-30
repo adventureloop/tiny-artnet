@@ -1,5 +1,5 @@
 ### Author: tj <tj@enoti.me>
-### Description: Scottish Consulate Techno Disco
+### Description: Scottish Consulate Techno Disco Controller
 ### Category: Other
 ### License: BSD 3
 
@@ -14,13 +14,15 @@ import wifi
 import gc
 
 DELAY = 0.5
-VERBOSE = "sensible" # on|off|sensible|silly
 BUFSIZE = 600
 artnet_port = 6454
 
 container = None
+textcontainer = None
 selected = [0,0]
 transmitter = True
+universe = 0
+selectuniverse = False
 
 def gen_artnet_pkt(data,universe=0x00):
     length = len(data)
@@ -44,7 +46,7 @@ def gen_artnet_pkt(data,universe=0x00):
 def rand_artnet_pkt(full=False):
     return gen_artnet_pkt(os.urandom(512))
 
-def parse_artnet_pkt(data):
+def parse_artnet_pkt(data, pktuniverse=0x0):
     data_len = len(data)
 
     if data_len < 20:
@@ -55,6 +57,10 @@ def parse_artnet_pkt(data):
     name, zero, opcode, protovers, seq, phys, \
         universe, length = unpack("!7sBHHBBHH",header)
     #print("name: {}, zero: {}, opcode: {}, protovers: {}, seq: {}, phys: {}, universe: {}, length: {}".format( name, zero, opcode, protovers, seq, phys, universe, length))
+
+    if pktuniverse != universe:
+        print("pktuniverse {} != filter universe {}".format(pktuniverse, universe))
+        return pkt_hdr, []
 
     pkt_hdr = pack("!7sBHHBBHH", name, zero, opcode,\
         protovers, seq, phys, universe, length)
@@ -81,7 +87,7 @@ def pktgen(displaycb):
     while True:
         #pktdata = os.urandom(512)
         if time.ticks_diff(start, time.ticks_ms()) > 500:
-            sock.sendto(gen_artnet_pkt(pktdata), (broadcast_addr, artnet_port))
+            sock.sendto(gen_artnet_pkt(pktdata, universe), (broadcast_addr, artnet_port))
             start = time.ticks_ms()
 
         if displaycb: 
@@ -97,14 +103,16 @@ def pktshow(displaycb):
         .format(broadcast_addr, artnet_port))
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setblocking(False)
     sock.bind((broadcast_addr,artnet_port))
 
     while True:
         pkt,addr = sock.recvfrom(BUFSIZE) #blocks
 
-        pkt_hdr, pkt_data = parse_artnet_pkt(pkt)
+        pkt_hdr, pkt_data = parse_artnet_pkt(pkt, universe)
         displaycb(pkt_data)
         if transmitter:
+            print("no more receiving")
             return
 
 def drawdata(data):
@@ -118,7 +126,6 @@ def drawdata(data):
 
     for y in range(0, 16):
         for x in range(0, 32):
-            #val = data[x*16+y] #working, 90 degrees off
             val = data[y*32+x] 
             colour = ugfx.html_color(int("0x{:02X}{:02X}{:02X}".format(val,val,val)))
 
@@ -134,6 +141,8 @@ def drawdata(data):
 def processbuttons(data):
     global transmitter
     global selected
+    global selectuniverse
+    global universe
 
     if buttons.is_pressed("JOY_RIGHT"):
         selected[0] = selected[0] + 1
@@ -153,21 +162,41 @@ def processbuttons(data):
         selected[1] = 160
     if selected[1] < 0:
         selected[1] = 0
-       
+
+    if buttons.is_pressed("JOY_CENTER"):
+        if selectuniverse:
+            selectuniverse = False
+        else:
+            selectuniverse = True
+        drawtext(textcontainer) #only draw when something changes
+
     inc = 30
     if buttons.is_pressed("BTN_A"):
-        index = selected[1]*32+selected[0]
-        
-        val = data[index] + inc
-        if val > 255:
-            val = 255
-        data[index] = val
+        if selectuniverse:
+            universe = universe + 1
+            if universe > 65535:
+                universe = 0
+            drawtext(textcontainer) #only draw when something changes
+        else:
+            index = selected[1]*32+selected[0]
+            
+            val = data[index] + inc
+            if val > 255:
+                val = 255
+            data[index] = val
     if buttons.is_pressed("BTN_B"):
-        index = selected[1]*32+selected[0]
-        val = data[index] - inc
-        if val < 0:
-            val = 0
-        data[index] = val 
+        if selectuniverse:
+            universe = universe - 1
+            if universe < 0:
+                universe = 65535
+            drawtext(textcontainer) #only draw when something changes
+        else:
+            index = selected[1]*32+selected[0]
+            val = data[index] - inc
+            if val < 0:
+                val = 0
+            data[index] = val 
+
     if buttons.is_pressed("BTN_MENU"):
         if transmitter:
             transmitter = False
@@ -176,27 +205,47 @@ def processbuttons(data):
     return data
 
 def tinyartnet():
-    print("{} bytes free".format(gc.mem_free()))
-    gc.collect()
-    print("{} bytes free".format(gc.mem_free()))
     while True:
         if transmitter:
             pktgen(drawdata)
         else:
             pktshow(drawdata)
 
+        print("{} bytes free".format(gc.mem_free()))
+#        gc.collect()
+#        print("{} bytes free".format(gc.mem_free()))
+
+def drawtext(con):
+    con.clear()
+    con.set_default_font(ugfx.FONT_NAME)
+    con.text(0, 5, "TINY-ARTNET", ugfx.GREEN)
+    con.set_default_font(ugfx.FONT_TITLE)
+    con.text(2, 50, "UNIVERSE 01", ugfx.YELLOW)
+
+    if selectuniverse:
+        con.box(0, 50, 320, 50)
+    con.set_default_font(ugfx.FONT_SMALL)
+    con.show()
+    
+
 print("starting")
 
 buttons.init()
 ugfx.init()
 ugfx.clear(ugfx.BLACK)
+
+"""
 ugfx.set_default_font(ugfx.FONT_NAME)
 ugfx.text(0, 5, "TINY-ARTNET", ugfx.GREEN)
 ugfx.set_default_font(ugfx.FONT_TITLE)
 ugfx.text(2, 50, "UNIVERSE 01", ugfx.YELLOW)
 ugfx.set_default_font(ugfx.FONT_SMALL)
+"""
+
+textcontainer = ugfx.Container(0, 0, 320, 80)
 container = ugfx.Container(0, 80,320,160)
 
+drawtext(textcontainer)
 wifi.connect()
 
 tinyartnet()
